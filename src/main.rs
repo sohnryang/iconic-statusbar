@@ -3,11 +3,17 @@ extern crate i3ipc;
 use std::{collections::HashMap, sync::mpsc, thread};
 
 use i3ipc::{
-    event::{inner::WindowChange, Event},
+    event::{
+        inner::{WindowChange, WorkspaceChange},
+        Event,
+    },
     reply::NodeType,
     I3Connection, I3EventListener, Subscription,
 };
-use iconic_statusbar::{tree_util::filter_childs_by_type, x11_util::wm_class_from_window_id};
+use iconic_statusbar::{
+    tree_util::{filter_childs_by_type, filter_childs_by_urgency},
+    x11_util::wm_class_from_window_id,
+};
 
 #[derive(Debug)]
 enum WindowType {
@@ -21,6 +27,10 @@ enum WindowType {
 enum Message {
     UpdateWindowTable(HashMap<i32, Vec<WindowType>>),
     UpdateWorkspaceFocus(i32),
+    UpdateUrgencyState {
+        workspace_id: i32,
+        urgent_windows: Vec<WindowType>,
+    },
 }
 
 fn main() {
@@ -79,13 +89,38 @@ fn main() {
         for event in listener.listen() {
             match event.unwrap() {
                 Event::WorkspaceEvent(e) => {
-                    let current_workspace_id =
-                        match e.current.unwrap().name.unwrap_or_default().parse::<i32>() {
+                    if e.change == WorkspaceChange::Urgent {
+                        let urgent_workspace_id = match e
+                            .current
+                            .clone()
+                            .unwrap()
+                            .name
+                            .unwrap_or_default()
+                            .parse::<i32>()
+                        {
                             Ok(x) => x,
                             Err(_) => continue,
                         };
-                    tx.send(Message::UpdateWorkspaceFocus(current_workspace_id))
+                        let urgent_windows = filter_childs_by_urgency(e.current.unwrap(), true)
+                            .iter()
+                            .map(|x| wm_class_from_window_id(x.window.unwrap_or_default() as u32))
+                            .filter(|x| x.is_some())
+                            .map(|x| classify_window(x.unwrap()))
+                            .collect::<Vec<_>>();
+                        tx.send(Message::UpdateUrgencyState {
+                            workspace_id: urgent_workspace_id,
+                            urgent_windows,
+                        })
                         .unwrap();
+                    } else {
+                        let current_workspace_id =
+                            match e.current.unwrap().name.unwrap_or_default().parse::<i32>() {
+                                Ok(x) => x,
+                                Err(_) => continue,
+                            };
+                        tx.send(Message::UpdateWorkspaceFocus(current_workspace_id))
+                            .unwrap();
+                    }
                 }
                 Event::WindowEvent(e) => {
                     match e.change {
@@ -110,6 +145,13 @@ fn main() {
             Message::UpdateWorkspaceFocus(workspace_id) => {
                 println!("focused workspace: {}", workspace_id)
             }
+            Message::UpdateUrgencyState {
+                workspace_id,
+                urgent_windows,
+            } => println!(
+                "workspace to update: {}, urgent windows: {:?}",
+                workspace_id, urgent_windows
+            ),
         };
     }
 }
