@@ -3,17 +3,17 @@ pub mod tree_util {
 
     pub fn filter_childs_by_type(root: Node, nodetype: NodeType) -> Vec<Node> {
         let mut stack = vec![root];
-        let mut filtered_childs = vec![];
+        let mut filtered_children = vec![];
         while !stack.is_empty() {
             let node = stack.pop().unwrap();
             if node.nodetype == nodetype {
-                filtered_childs.push(node.clone());
+                filtered_children.push(node.clone());
             }
             for child in node.nodes {
                 stack.push(child);
             }
         }
-        filtered_childs
+        filtered_children
     }
 }
 
