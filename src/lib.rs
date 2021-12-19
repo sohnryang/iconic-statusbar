@@ -15,6 +15,21 @@ pub mod tree_util {
         }
         filtered_children
     }
+
+    pub fn filter_childs_by_urgency(root: Node, urgency: bool) -> Vec<Node> {
+        let mut stack = vec![root];
+        let mut filtered_children = vec![];
+        while !stack.is_empty() {
+            let node = stack.pop().unwrap();
+            if node.urgent == urgency {
+                filtered_children.push(node.clone());
+            }
+            for child in node.nodes {
+                stack.push(child);
+            }
+        }
+        filtered_children
+    }
 }
 
 pub mod x11_util {
